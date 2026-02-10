@@ -7,6 +7,7 @@ import albumentations as A
 from ultralytics import YOLO
 import pandas as pd
 import re
+from copy_paste import copy_paste_objects
 import numpy as np
 
 SEED = 7428321
@@ -119,132 +120,132 @@ def testfall_2_hyperparameter(data, project):
             project=project,
             extra_args={"dfl": val},
         )
-def copy_paste_objects(img, boxes, class_labels, labels_dir, images_dir, object_count_max=1):
-    """
-    Füge zufällig Objekte von anderen Originalbildern ein.
-    - img: aktuelles Bild
-    - boxes, class_labels: aktuelle BBoxes
-    - labels_dir: Path zu Labels des Original-Datensatzes
-    - images_dir: Path zu den Originalbildern
-    - object_count_max: max Anzahl Objekte pro Bild
-    """
-    # Alle Originalbilder, die nicht _aug_<zahl> sind
-    original_images = [
-        p for p in images_dir.glob("*.*")
-        if not re.search(r"_aug_\d+\.\w+$", p.name) 
-    ]
-    if not original_images:
-        return img, boxes, class_labels
+# def copy_paste_objects(img, boxes, class_labels, labels_dir, images_dir, object_count_max=1):
+#     """
+#     Füge zufällig Objekte von anderen Originalbildern ein.
+#     - img: aktuelles Bild
+#     - boxes, class_labels: aktuelle BBoxes
+#     - labels_dir: Path zu Labels des Original-Datensatzes
+#     - images_dir: Path zu den Originalbildern
+#     - object_count_max: max Anzahl Objekte pro Bild
+#     """
+#     # Alle Originalbilder, die nicht _aug_<zahl> sind
+#     original_images = [
+#         p for p in images_dir.glob("*.*")
+#         if not re.search(r"_aug_\d+\.\w+$", p.name) 
+#     ]
+#     if not original_images:
+#         return img, boxes, class_labels
 
-    h_target, w_target = img.shape[:2]
-    added_boxes = []
-    added_labels = []
+#     h_target, w_target = img.shape[:2]
+#     added_boxes = []
+#     added_labels = []
 
-    # zufällige Anzahl Objekte auswählen
-    num_objects = random.randint(1, object_count_max)
+#     # zufällige Anzahl Objekte auswählen
+#     num_objects = random.randint(1, object_count_max)
 
-    # Liste um bereits gewählte Paste-Bilder zu tracken (kein doppelt)
-    used_images = []
+#     # Liste um bereits gewählte Paste-Bilder zu tracken (kein doppelt)
+#     used_images = []
 
-    for _ in range(num_objects):
-        # wähle zufälliges Bild, das noch nicht verwendet wurde
-        candidates = [p for p in original_images if p not in used_images]
-        if not candidates:
-            break
-        paste_img_path = random.choice(candidates)
-        used_images.append(paste_img_path)
+#     for _ in range(num_objects):
+#         # wähle zufälliges Bild, das noch nicht verwendet wurde
+#         candidates = [p for p in original_images if p not in used_images]
+#         if not candidates:
+#             break
+#         paste_img_path = random.choice(candidates)
+#         used_images.append(paste_img_path)
 
-        paste_label_path = labels_dir / f"{paste_img_path.stem}.txt"
-        if not paste_label_path.exists():
-            continue
+#         paste_label_path = labels_dir / f"{paste_img_path.stem}.txt"
+#         if not paste_label_path.exists():
+#             continue
 
-        # Paste-Bild laden
-        paste_img = cv2.imread(str(paste_img_path))
+#         # Paste-Bild laden
+#         paste_img = cv2.imread(str(paste_img_path))
 
-        # Paste-BBoxes und Labels laden
-        paste_boxes = []
-        paste_class_labels = []
-        with open(paste_label_path, "r") as f:
-            for line in f.readlines():
-                parts = line.strip().split()
-                cls = int(float(parts[0]))  # cast auf int falls 0.0
-                bbox = [float(x) for x in parts[1:5]]
-                paste_boxes.append(bbox)
-                paste_class_labels.append(cls)
+#         # Paste-BBoxes und Labels laden
+#         paste_boxes = []
+#         paste_class_labels = []
+#         with open(paste_label_path, "r") as f:
+#             for line in f.readlines():
+#                 parts = line.strip().split()
+#                 cls = int(float(parts[0]))  # cast auf int falls 0.0
+#                 bbox = [float(x) for x in parts[1:5]]
+#                 paste_boxes.append(bbox)
+#                 paste_class_labels.append(cls)
 
-        if not paste_boxes:
-            continue
+#         if not paste_boxes:
+#             continue
 
-        # zufällige BBox auswählen (wenn nur eine vorhanden, dann diese)
-        idx = random.randint(0, len(paste_boxes) - 1)
-        px, py, pw, ph = paste_boxes[idx]
-        cls = paste_class_labels[idx]
+#         # zufällige BBox auswählen (wenn nur eine vorhanden, dann diese)
+#         idx = random.randint(0, len(paste_boxes) - 1)
+#         px, py, pw, ph = paste_boxes[idx]
+#         cls = paste_class_labels[idx]
 
-        # YOLO -> Pixel-Koordinaten
-        h, w = paste_img.shape[:2]
-        x1 = int((px - pw / 2) * w)
-        y1 = int((py - ph / 2) * h)
-        x2 = int((px + pw / 2) * w)
-        y2 = int((py + ph / 2) * h)
+#         # YOLO -> Pixel-Koordinaten
+#         h, w = paste_img.shape[:2]
+#         x1 = int((px - pw / 2) * w)
+#         y1 = int((py - ph / 2) * h)
+#         x2 = int((px + pw / 2) * w)
+#         y2 = int((py + ph / 2) * h)
 
-        # Crop aus Paste-Bild
-        obj_crop = paste_img[y1:y2, x1:x2]
-        obj_h, obj_w = obj_crop.shape[:2]
+#         # Crop aus Paste-Bild
+#         obj_crop = paste_img[y1:y2, x1:x2]
+#         obj_h, obj_w = obj_crop.shape[:2]
 
-        # Random Position im Originalbild
-        if obj_h >= h_target or obj_w >= w_target:
-            continue  # Skip wenn Objekt zu groß
+#         # Random Position im Originalbild
+#         if obj_h >= h_target or obj_w >= w_target:
+#             continue  # Skip wenn Objekt zu groß
 
-        x_offset = random.randint(0, w_target - obj_w)
-        y_offset = random.randint(0, h_target - obj_h)
+#         x_offset = random.randint(0, w_target - obj_w)
+#         y_offset = random.randint(0, h_target - obj_h)
 
-        # Einfügen (overwrite)
-        img[y_offset:y_offset+obj_h, x_offset:x_offset+obj_w] = obj_crop
+#         # Einfügen (overwrite)
+#         img[y_offset:y_offset+obj_h, x_offset:x_offset+obj_w] = obj_crop
 
-        # Neue BBox in YOLO-Normalized-Koordinaten
-        new_px = (x_offset + obj_w / 2) / w_target
-        new_py = (y_offset + obj_h / 2) / h_target
-        new_pw = obj_w / w_target
-        new_ph = obj_h / h_target
+#         # Neue BBox in YOLO-Normalized-Koordinaten
+#         new_px = (x_offset + obj_w / 2) / w_target
+#         new_py = (y_offset + obj_h / 2) / h_target
+#         new_pw = obj_w / w_target
+#         new_ph = obj_h / h_target
 
-        added_boxes.append([new_px, new_py, new_pw, new_ph])
-        added_labels.append(cls)
+#         added_boxes.append([new_px, new_py, new_pw, new_ph])
+#         added_labels.append(cls)
 
-    # Alte BBoxes prüfen und entfernen, falls mehr als 80% von neuen Boxen verdeckt
-    final_boxes = []
-    final_labels = []
+#     # Alte BBoxes prüfen und entfernen, falls mehr als 80% von neuen Boxen verdeckt
+#     final_boxes = []
+#     final_labels = []
 
-    def iou(box1, box2):
-        # YOLO-normalisierte Box [x, y, w, h] -> Pixel
-        x1a = (box1[0] - box1[2]/2) * w_target
-        y1a = (box1[1] - box1[3]/2) * h_target
-        x2a = (box1[0] + box1[2]/2) * w_target
-        y2a = (box1[1] + box1[3]/2) * h_target
+#     def iou(box1, box2):
+#         # YOLO-normalisierte Box [x, y, w, h] -> Pixel
+#         x1a = (box1[0] - box1[2]/2) * w_target
+#         y1a = (box1[1] - box1[3]/2) * h_target
+#         x2a = (box1[0] + box1[2]/2) * w_target
+#         y2a = (box1[1] + box1[3]/2) * h_target
 
-        x1b = (box2[0] - box2[2]/2) * w_target
-        y1b = (box2[1] - box2[3]/2) * h_target
-        x2b = (box2[0] + box2[2]/2) * w_target
-        y2b = (box2[1] + box2[3]/2) * h_target
+#         x1b = (box2[0] - box2[2]/2) * w_target
+#         y1b = (box2[1] - box2[3]/2) * h_target
+#         x2b = (box2[0] + box2[2]/2) * w_target
+#         y2b = (box2[1] + box2[3]/2) * h_target
 
-        xi1 = max(x1a, x1b)
-        yi1 = max(y1a, y1b)
-        xi2 = min(x2a, x2b)
-        yi2 = min(y2a, y2b)
-        inter_area = max(0, xi2 - xi1) * max(0, yi2 - yi1)
-        box1_area = (x2a - x1a) * (y2a - y1a)
-        return inter_area / (box1_area + 1e-6)  # IoU in Bezug auf alte Box
+#         xi1 = max(x1a, x1b)
+#         yi1 = max(y1a, y1b)
+#         xi2 = min(x2a, x2b)
+#         yi2 = min(y2a, y2b)
+#         inter_area = max(0, xi2 - xi1) * max(0, yi2 - yi1)
+#         box1_area = (x2a - x1a) * (y2a - y1a)
+#         return inter_area / (box1_area + 1e-6)  # IoU in Bezug auf alte Box
 
-    # check alte Boxen
-    for b, c in zip(boxes, class_labels):
-        if all(iou(b, nb) < 0.8 for nb in added_boxes):
-            final_boxes.append(b)
-            final_labels.append(c)
+#     # check alte Boxen
+#     for b, c in zip(boxes, class_labels):
+#         if all(iou(b, nb) < 0.8 for nb in added_boxes):
+#             final_boxes.append(b)
+#             final_labels.append(c)
 
-    # neue Boxen hinzufügen
-    final_boxes.extend(added_boxes)
-    final_labels.extend(added_labels)
+#     # neue Boxen hinzufügen
+#     final_boxes.extend(added_boxes)
+#     final_labels.extend(added_labels)
 
-    return img, final_boxes, final_labels
+#     return img, final_boxes, final_labels
 
 
 AUGMENTATIONS = {
