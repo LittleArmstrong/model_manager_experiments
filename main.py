@@ -128,7 +128,7 @@ def copy_paste_objects(img, boxes, class_labels, labels_dir, images_dir, object_
     - images_dir: Path zu den Originalbildern
     - object_count_max: max Anzahl Objekte pro Bild
     """
-    # Alle Originalbilder, die nicht _aug_<zahl> sind und nicht das aktuelle Bild
+    # Alle Originalbilder, die nicht _aug_<zahl> sind
     original_images = [
         p for p in images_dir.glob("*.*")
         if not re.search(r"_aug_\d+\.\w+$", p.name) 
@@ -136,11 +136,24 @@ def copy_paste_objects(img, boxes, class_labels, labels_dir, images_dir, object_
     if not original_images:
         return img, boxes, class_labels
 
+    h_target, w_target = img.shape[:2]
+    added_boxes = []
+    added_labels = []
+
     # zufällige Anzahl Objekte auswählen
     num_objects = random.randint(1, object_count_max)
 
+    # Liste um bereits gewählte Paste-Bilder zu tracken (kein doppelt)
+    used_images = []
+
     for _ in range(num_objects):
-        paste_img_path = random.choice(original_images)
+        # wähle zufälliges Bild, das noch nicht verwendet wurde
+        candidates = [p for p in original_images if p not in used_images]
+        if not candidates:
+            break
+        paste_img_path = random.choice(candidates)
+        used_images.append(paste_img_path)
+
         paste_label_path = labels_dir / f"{paste_img_path.stem}.txt"
         if not paste_label_path.exists():
             continue
@@ -162,7 +175,7 @@ def copy_paste_objects(img, boxes, class_labels, labels_dir, images_dir, object_
         if not paste_boxes:
             continue
 
-        # zufällige BBox auswählen
+        # zufällige BBox auswählen (wenn nur eine vorhanden, dann diese)
         idx = random.randint(0, len(paste_boxes) - 1)
         px, py, pw, ph = paste_boxes[idx]
         cls = paste_class_labels[idx]
@@ -179,7 +192,6 @@ def copy_paste_objects(img, boxes, class_labels, labels_dir, images_dir, object_
         obj_h, obj_w = obj_crop.shape[:2]
 
         # Random Position im Originalbild
-        h_target, w_target = img.shape[:2]
         if obj_h >= h_target or obj_w >= w_target:
             continue  # Skip wenn Objekt zu groß
 
@@ -195,28 +207,42 @@ def copy_paste_objects(img, boxes, class_labels, labels_dir, images_dir, object_
         new_pw = obj_w / w_target
         new_ph = obj_h / h_target
 
-        boxes.append([new_px, new_py, new_pw, new_ph])
-        class_labels.append(cls)
+        added_boxes.append([new_px, new_py, new_pw, new_ph])
+        added_labels.append(cls)
 
-    # Prüfen ob vorhandene BBoxes mehr als 80% verdeckt sind
+    # Alte BBoxes prüfen und entfernen, falls mehr als 80% von neuen Boxen verdeckt
     final_boxes = []
     final_labels = []
-    for b, c in zip(boxes, class_labels):
-        bx, by, bw, bh = b
-        # Pixelkoordinaten
-        x1 = int((bx - bw/2) * w_target)
-        y1 = int((by - bh/2) * h_target)
-        x2 = int((bx + bw/2) * w_target)
-        y2 = int((by + bh/2) * h_target)
 
-        # Maske mit 0 = transparent, 1 = belegt
-        mask = np.zeros((h_target, w_target), dtype=np.uint8)
-        mask[y1:y2, x1:x2] = 1
-        occlusion_ratio = 1 - np.sum(mask) / ((x2-x1)*(y2-y1) + 1e-6)  # wenn weniger als Pixel bleibt
-        # simpler Check: falls große Überschneidung
-        if occlusion_ratio < 0.8:
+    def iou(box1, box2):
+        # YOLO-normalisierte Box [x, y, w, h] -> Pixel
+        x1a = (box1[0] - box1[2]/2) * w_target
+        y1a = (box1[1] - box1[3]/2) * h_target
+        x2a = (box1[0] + box1[2]/2) * w_target
+        y2a = (box1[1] + box1[3]/2) * h_target
+
+        x1b = (box2[0] - box2[2]/2) * w_target
+        y1b = (box2[1] - box2[3]/2) * h_target
+        x2b = (box2[0] + box2[2]/2) * w_target
+        y2b = (box2[1] + box2[3]/2) * h_target
+
+        xi1 = max(x1a, x1b)
+        yi1 = max(y1a, y1b)
+        xi2 = min(x2a, x2b)
+        yi2 = min(y2a, y2b)
+        inter_area = max(0, xi2 - xi1) * max(0, yi2 - yi1)
+        box1_area = (x2a - x1a) * (y2a - y1a)
+        return inter_area / (box1_area + 1e-6)  # IoU in Bezug auf alte Box
+
+    # check alte Boxen
+    for b, c in zip(boxes, class_labels):
+        if all(iou(b, nb) < 0.8 for nb in added_boxes):
             final_boxes.append(b)
             final_labels.append(c)
+
+    # neue Boxen hinzufügen
+    final_boxes.extend(added_boxes)
+    final_labels.extend(added_labels)
 
     return img, final_boxes, final_labels
 
@@ -228,131 +254,131 @@ AUGMENTATIONS = {
          {"object_count":3},
      ],
 
-    # --- Mosaic (2×2 Grid) ---
-    # Albumentations ‚Mosaic‘ braucht zusätzliche Bilder als Metadata:
-    "mosaic": [
-    ],
+    # # --- Mosaic (2×2 Grid) ---
+    # # Albumentations ‚Mosaic‘ braucht zusätzliche Bilder als Metadata:
+    # "mosaic": [
+    # ],
 
-    # --- HSV getrennt: H only ---
-    "hsv-hue": [
-        A.Compose([A.HueSaturationValue(
-            hue_shift_limit=int(0.01 * 180),
-            sat_shift_limit=0,
-            val_shift_limit=0,
-            p=1.0
-        )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
-        A.Compose([A.HueSaturationValue(
-            hue_shift_limit=int(0.015 * 180),
-            sat_shift_limit=0,
-            val_shift_limit=0,
-            p=1.0
-        )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
-        A.Compose([A.HueSaturationValue(
-            hue_shift_limit=int(0.02 * 180),
-            sat_shift_limit=0,
-            val_shift_limit=0,
-            p=1.0
-        )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
-    ],
+    # # --- HSV getrennt: H only ---
+    # "hsv-hue": [
+    #     A.Compose([A.HueSaturationValue(
+    #         hue_shift_limit=int(0.01 * 180),
+    #         sat_shift_limit=0,
+    #         val_shift_limit=0,
+    #         p=1.0
+    #     )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
+    #     A.Compose([A.HueSaturationValue(
+    #         hue_shift_limit=int(0.015 * 180),
+    #         sat_shift_limit=0,
+    #         val_shift_limit=0,
+    #         p=1.0
+    #     )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
+    #     A.Compose([A.HueSaturationValue(
+    #         hue_shift_limit=int(0.02 * 180),
+    #         sat_shift_limit=0,
+    #         val_shift_limit=0,
+    #         p=1.0
+    #     )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
+    # ],
 
-    # --- HSV getrennt: S only ---
-    "hsv-saturation": [
-        A.Compose([A.HueSaturationValue(
-            hue_shift_limit=0,
-            sat_shift_limit=int(0.5 * 255),
-            val_shift_limit=0,
-            p=1.0
-        )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
-        A.Compose([A.HueSaturationValue(
-            hue_shift_limit=0,
-            sat_shift_limit=int(0.7 * 255),
-            val_shift_limit=0,
-            p=1.0
-        )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
-        A.Compose([A.HueSaturationValue(
-            hue_shift_limit=0,
-            sat_shift_limit=int(0.9 * 255),
-            val_shift_limit=0,
-            p=1.0
-        )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
-    ],
+    # # --- HSV getrennt: S only ---
+    # "hsv-saturation": [
+    #     A.Compose([A.HueSaturationValue(
+    #         hue_shift_limit=0,
+    #         sat_shift_limit=int(0.5 * 255),
+    #         val_shift_limit=0,
+    #         p=1.0
+    #     )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
+    #     A.Compose([A.HueSaturationValue(
+    #         hue_shift_limit=0,
+    #         sat_shift_limit=int(0.7 * 255),
+    #         val_shift_limit=0,
+    #         p=1.0
+    #     )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
+    #     A.Compose([A.HueSaturationValue(
+    #         hue_shift_limit=0,
+    #         sat_shift_limit=int(0.9 * 255),
+    #         val_shift_limit=0,
+    #         p=1.0
+    #     )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
+    # ],
 
-    # --- HSV getrennt: V only ---
-    "hsv-value": [
-        A.Compose([A.HueSaturationValue(
-            hue_shift_limit=0,
-            sat_shift_limit=0,
-            val_shift_limit=int(0.3 * 255),
-            p=1.0
-        )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
-        A.Compose([A.HueSaturationValue(
-            hue_shift_limit=0,
-            sat_shift_limit=0,
-            val_shift_limit=int(0.4 * 255),
-            p=1.0
-        )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
-        A.Compose([A.HueSaturationValue(
-            hue_shift_limit=0,
-            sat_shift_limit=0,
-            val_shift_limit=int(0.5 * 255),
-            p=1.0
-        )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
-    ],
+    # # --- HSV getrennt: V only ---
+    # "hsv-value": [
+    #     A.Compose([A.HueSaturationValue(
+    #         hue_shift_limit=0,
+    #         sat_shift_limit=0,
+    #         val_shift_limit=int(0.3 * 255),
+    #         p=1.0
+    #     )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
+    #     A.Compose([A.HueSaturationValue(
+    #         hue_shift_limit=0,
+    #         sat_shift_limit=0,
+    #         val_shift_limit=int(0.4 * 255),
+    #         p=1.0
+    #     )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
+    #     A.Compose([A.HueSaturationValue(
+    #         hue_shift_limit=0,
+    #         sat_shift_limit=0,
+    #         val_shift_limit=int(0.5 * 255),
+    #         p=1.0
+    #     )], bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
+    # ],
 
-    # --- Crop ---
-    "crop": [
-        A.Compose([
-            A.RandomResizedCrop(
-                height=640, width=640,
-                scale=(0.85, 0.95),  # Bereich des Bildes, der behalten wird
-                ratio=(0.9, 1.1),
-                interpolation=cv2.INTER_LINEAR,
-                p=1.0
-            )
-        ], bbox_params=A.BboxParams(
-            format="yolo",
-            label_fields=["class_labels"],
-            min_visibility=0.3  # entfernt kleine BBoxes
-        )),
+    # # --- Crop ---
+    # "crop": [
+    #     A.Compose([
+    #         A.RandomResizedCrop(
+    #             height=640, width=640,
+    #             scale=(0.85, 0.95),  # Bereich des Bildes, der behalten wird
+    #             ratio=(0.9, 1.1),
+    #             interpolation=cv2.INTER_LINEAR,
+    #             p=1.0
+    #         )
+    #     ], bbox_params=A.BboxParams(
+    #         format="yolo",
+    #         label_fields=["class_labels"],
+    #         min_visibility=0.3  # entfernt kleine BBoxes
+    #     )),
 
-        A.Compose([
-            A.RandomResizedCrop(
-                height=640, width=640,
-                scale=(0.75, 0.85),
-                ratio=(0.9, 1.1),
-                interpolation=cv2.INTER_LINEAR,
-                p=1.0
-            )
-        ], bbox_params=A.BboxParams(
-            format="yolo",
-            label_fields=["class_labels"],
-            min_visibility=0.3
-        )),
+    #     A.Compose([
+    #         A.RandomResizedCrop(
+    #             height=640, width=640,
+    #             scale=(0.75, 0.85),
+    #             ratio=(0.9, 1.1),
+    #             interpolation=cv2.INTER_LINEAR,
+    #             p=1.0
+    #         )
+    #     ], bbox_params=A.BboxParams(
+    #         format="yolo",
+    #         label_fields=["class_labels"],
+    #         min_visibility=0.3
+    #     )),
 
-        A.Compose([
-            A.RandomResizedCrop(
-                height=640, width=640,
-                scale=(0.65, 0.75),
-                ratio=(0.9, 1.1),
-                interpolation=cv2.INTER_LINEAR,
-                p=1.0
-            )
-        ], bbox_params=A.BboxParams(
-            format="yolo",
-            label_fields=["class_labels"],
-            min_visibility=0.3
-        )),
-    ],
+    #     A.Compose([
+    #         A.RandomResizedCrop(
+    #             height=640, width=640,
+    #             scale=(0.65, 0.75),
+    #             ratio=(0.9, 1.1),
+    #             interpolation=cv2.INTER_LINEAR,
+    #             p=1.0
+    #         )
+    #     ], bbox_params=A.BboxParams(
+    #         format="yolo",
+    #         label_fields=["class_labels"],
+    #         min_visibility=0.3
+    #     )),
+    # ],
 
-    # --- Random Occlusion / CoarseDropout ---
-    "occlusion": [
-        A.Compose([A.CoarseDropout(max_holes=2, max_height=20, max_width=20, fill_value=0, p=1.0)],
-                  bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
-        A.Compose([A.CoarseDropout(max_holes=2, max_height=40, max_width=40, fill_value=0, p=1.0)],
-                  bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
-        A.Compose([A.CoarseDropout(max_holes=2, max_height=60, max_width=60, fill_value=0, p=1.0)],
-                  bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
-    ],
+    # # --- Random Occlusion / CoarseDropout ---
+    # "occlusion": [
+    #     A.Compose([A.CoarseDropout(max_holes=2, max_height=20, max_width=20, fill_value=0, p=1.0)],
+    #               bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
+    #     A.Compose([A.CoarseDropout(max_holes=2, max_height=40, max_width=40, fill_value=0, p=1.0)],
+    #               bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
+    #     A.Compose([A.CoarseDropout(max_holes=2, max_height=60, max_width=60, fill_value=0, p=1.0)],
+    #               bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])),
+    # ],
 }
 
 
