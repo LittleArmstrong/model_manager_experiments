@@ -2,6 +2,7 @@ from pathlib import Path
 from ultralytics import YOLO
 import pandas as pd
 import torch.nn as nn
+from src.custom_yolo import make_trainer
 
 def calc_f1_score(precision:float, recall:float):
     try:
@@ -17,13 +18,12 @@ def train_run(
     device:str,
     seed:int,
     extra_args: dict | None = None,
-    dropout: float|None = None
+    loss_func: str|None = None,
+    dropout_rate: float|None = None
 ):
 
     model = YOLO("YOLOv12n.pt")
-    if dropout:
-        dropout = nn.Dropout(dropout)
-        model.model.model[10].register_forward_hook(lambda m, i, o: dropout(o))
+    trainer = make_trainer(loss_func, dropout_rate)
 
     args = dict(
         data=data_yaml,
@@ -41,8 +41,7 @@ def train_run(
         save=True,
         plots=True,
         save_dir=(Path(project)/run_name).resolve(),
-        # project=project,
-        # name=run_name,
+        trainer=trainer,
         exist_ok=False,
         verbose=True
     )

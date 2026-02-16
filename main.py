@@ -29,37 +29,51 @@ def testfall_1_baseline(data, project):
 
 def testfall_2_hyperparameter(data, project):
     # Box Loss Weight
-    for val in [10, 12, 15]:
-        train_run(
-            run_name=f"box_loss_{val}",
-            data_yaml=data,
-            project=project,
-            extra_args={"box": val},
-            device=DEVICE,
-            seed=SEED   
-        )
+    loss_funcs = ['ciou', 'siou', 'eiou']
+    for loss_func in loss_funcs:
+        if loss_func != 'ciou':
+            train_run(
+                run_name=f"{loss_func}",
+                data_yaml=data,
+                project=project,
+                device=DEVICE,
+                seed=SEED,
+                loss_func=loss_func   
+            )
+        for val in [10, 12, 15]:
+            train_run(
+                run_name=f"{loss_func}_box_loss_{val}",
+                data_yaml=data,
+                project=project,
+                extra_args={"box": val},
+                device=DEVICE,
+                seed=SEED,
+                loss_func=loss_func   
+            )
 
-    # Distribution Focal Loss
-    for val in [2, 3, 4]:
-        train_run(
-            run_name=f"dfl_{val}",
-            data_yaml=data,
-            project=project,
-            extra_args={"dfl": val},
-            device=DEVICE,
-            seed=SEED
-        )
+        # Distribution Focal Loss
+        for val in [2, 3, 4]:
+            train_run(
+                run_name=f"{loss_func}_dfl_{val}",
+                data_yaml=data,
+                project=project,
+                extra_args={"dfl": val},
+                device=DEVICE,
+                seed=SEED,
+                loss_func=loss_func  
+            )
 
-    # class weight loss
-    for val in [1, 2, 3]:
-        train_run(
-            run_name=f"cls_{val}",
-            data_yaml=data,
-            project=project,
-            extra_args={"cls": val},
-            device=DEVICE,
-            seed=SEED
-        )
+        # class weight loss
+        for val in [1, 2, 3]:
+            train_run(
+                run_name=f"{loss_func}_cls_{val}",
+                data_yaml=data,
+                project=project,
+                extra_args={"cls": val},
+                device=DEVICE,
+                seed=SEED,
+                loss_func=loss_func  
+            )
 
 AUGMENTATIONS = {
     # --- CopyPaste  ---
@@ -259,10 +273,10 @@ if __name__ == "__main__":
     # data1 = "datasets/strawberry_test/data.yaml"
     # testfall_1_baseline( data1, project1)
 
-    # project2 = "runs/testfall_2_hyperparameter"
-    # data2 = "datasets/strawberry_test/data.yaml"   
-    # testfall_2_hyperparameter(data2, project2)
+    project2 = "runs/testfall_2_hyperparameter"
+    data2 = "datasets/strawberry_test/data.yaml"   
+    testfall_2_hyperparameter(data2, project2)
 
-    project3 = "runs/testfall_3_augmentations"
-    data3 = "datasets/strawberry_test_augmented"   
-    testfall_3_training(data3, project3)
+    # project3 = "runs/testfall_3_augmentations"
+    # data3 = "datasets/strawberry_test_augmented"   
+    # testfall_3_training(data3, project3)
