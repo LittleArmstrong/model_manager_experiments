@@ -1,61 +1,9 @@
-import os
 import random
 from pathlib import Path
 from PIL import Image
 import numpy as np
+from src.augmentations.utils import get_label_path, load_yolo_labels
 
-
-def get_label_path(image_path, labels_dir):
-    """
-    Konvertiert Bildpfad zu Label-Pfad im labels_dir.
-    
-    Args:
-        image_path: Path-Objekt des Bildes
-        labels_dir: Verzeichnis wo die Labels liegen
-    
-    Returns:
-        Path-Objekt des Label-Files
-    """
-    # Nimm den Dateinamen des Bildes und ändere Extension zu .txt
-    label_filename = image_path.stem + '.txt'
-    label_path = Path(labels_dir) / label_filename
-    
-    return label_path
-
-
-def load_yolo_labels(label_path):
-    """
-    Lädt YOLO-Format Labels aus einer Datei.
-    
-    Args:
-        label_path: Pfad zur Label-Datei
-    
-    Returns:
-        Tuple von (class_labels, boxes) wobei boxes normalisiert sind [x_center, y_center, width, height]
-    """
-    if not label_path.exists():
-        return [], []
-    
-    class_labels = []
-    boxes = []
-    
-    with open(label_path, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            
-            parts = line.split()
-            class_id = int(parts[0])
-            x_center = float(parts[1])
-            y_center = float(parts[2])
-            width = float(parts[3])
-            height = float(parts[4])
-            
-            class_labels.append(class_id)
-            boxes.append([x_center, y_center, width, height])
-    
-    return class_labels, boxes
 
 
 def adjust_boxes_for_grid(boxes, row, col, grid_x, grid_y):
@@ -237,42 +185,3 @@ def create_mosaic(img, boxes, class_labels, images_dir, labels_dir, img_size=Non
     else:
         return mosaic, all_boxes, all_class_labels
 
-
-# Beispielaufruf
-if __name__ == "__main__":
-    # Beispiel-Parameter
-    img = "/pfad/zum/bild.jpg"
-    
-    # Bounding Boxes im YOLO-Format (normalisiert 0-1): [x_center, y_center, width, height]
-    boxes = [
-        [0.5, 0.5, 0.3, 0.4],  # Beispiel-Box
-        [0.2, 0.3, 0.15, 0.2]  # Beispiel-Box
-    ]
-    
-    # Class Labels (entsprechend zu den Boxes)
-    class_labels = [0, 1]  # Beispiel: Klasse 0 und Klasse 1
-    
-    images_dir = "/pfad/zum/images_verzeichnis"
-    labels_dir = "/pfad/zum/labels_verzeichnis"
-    
-    # Erstelle 2x2 Mosaic mit Originalgröße (Standard)
-    mosaic_image, new_boxes, new_class_labels = create_mosaic(
-        img, boxes, class_labels, images_dir, labels_dir
-    )
-    
-    # Oder mit 3x3 Grid
-    # mosaic_image, new_boxes, new_class_labels = create_mosaic(
-    #     img, boxes, class_labels, images_dir, labels_dir, grid=(3, 3)
-    # )
-    
-    # Oder mit 2x3 Grid und spezifischer Größe
-    # mosaic_image, new_boxes, new_class_labels = create_mosaic(
-    #     img, boxes, class_labels, images_dir, labels_dir, img_size=640, grid=(2, 3)
-    # )
-    
-    print(f"\nNeue Labels: {len(new_class_labels)} Objekte")
-    for i, (cls, box) in enumerate(zip(new_class_labels, new_boxes)):
-        print(f"  Objekt {i+1}: Klasse {cls}, Box {box}")
-    
-    # Optional: Mosaic-Bild speichern
-    # mosaic_image.save("/pfad/zum/output.jpg")

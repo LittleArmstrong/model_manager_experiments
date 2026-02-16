@@ -16,7 +16,8 @@ def copy_paste_objects(img, boxes, class_labels, labels_dir, images_dir, object_
         random_scale: bool, ob eingefügte Objekte skaliert werden
         scale_range: Tupel (min, max) für Random Scaling
     """
-    original_images = [p for p in images_dir.glob("*.*") if not re.search(r"_aug_\d+\.\w+$", p.name)]
+    # original_images = [p for p in images_dir.glob("*.*") if not re.search(r"_aug_\d+\.\w+$", p.name)]
+    original_images = [p for p in images_dir.glob("*.*")]
     if not original_images:
         return img, boxes, class_labels
 
