@@ -11,7 +11,8 @@ SEED = 7428321
 def get_device():
     return "0" if torch.cuda.is_available() else "cpu"
 
-DEVICE = get_device()
+# DEVICE = get_device()
+DEVICE = None
 
 random.seed(SEED)
 torch.manual_seed(SEED)
@@ -223,8 +224,7 @@ AUGMENTATIONS = {
 
 
 
-
-def testfall_3_training(original_dataset_dir: str, project_dir: str):
+def testfall_3_augment_training(original_dataset_dir: str, project_dir: str):
     """
     Iteriert über alle Augmentierungen in AUGMENTATIONS,
     erzeugt jeweils einen augmentierten Datensatz und trainiert YOLOv12n darauf.
@@ -269,14 +269,18 @@ def testfall_3_training(original_dataset_dir: str, project_dir: str):
 
 
 if __name__ == "__main__":
-    # project1 = "runs/testfall_1_baseline"
-    # data1 = "datasets/strawberry_test/data.yaml"
-    # testfall_1_baseline( data1, project1)
+    project1 = "runs/testfall_1_baseline"
+    # data1 = "datasets/Erdbeeren100pC_640px/data.yaml"
+    data1 = r"test_datasets\strawberry_test\data.yaml"
+    testfall_1_baseline( data1, project1)
 
-    project2 = "runs/testfall_2_hyperparameter"
-    data2 = "datasets/strawberry_test/data.yaml"   
-    testfall_2_hyperparameter(data2, project2)
+    # project2 = "runs/testfall_2_hyperparameter"
+    # testfall_2_hyperparameter(data1, project2)
 
-    # project3 = "runs/testfall_3_augmentations"
-    # data3 = "datasets/strawberry_test_augmented"   
-    # testfall_3_training(data3, project3)
+    # project3 = "runs/testfall_3_augmentations" 
+    # data3 = "datasets/Erdbeeren100pC_640px_Aug_2/data.yaml"
+    # testfall_3_augment_training(data3, project3)
+
+    # project3 = "runs/testfall_3_augmentations2" 
+    # data3 = "datasets/Erdbeeren100pC_640px_Aug_3/data.yaml"
+    # testfall_3_augment_training(data3, project3)

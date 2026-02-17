@@ -1,0 +1,23 @@
+﻿names:
+- blossom
+- bud
+- fruit
+- pre fruit
+nc: 4
+split:
+  test: 0.1
+  train: 0.7
+  val: 0.2
+test: images/test
+train: images/train
+val: images/val
+augmentation:
+- rotation: 180
+  translation: 0.15
+  scale: 0.2
+  noise: 0.1
+  brightness: 0.1
+  contrast: 0.1
+  flip_h: 0.5
+  flip_v: 0.5
+  num_augments: 2

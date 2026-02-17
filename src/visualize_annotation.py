@@ -65,6 +65,5 @@ def create_annotated_folder_yolo(dataset_dir: str, output_dir_name="annotated", 
 if __name__ == "__main__":
     # create_annotated_folder_yolo("runs/testfall_3_augmentations/datasets/copy_paste_var3")
     # create_annotated_folder_yolo("runs/testfall_3_augmentations/datasets/mosaic_var1")
-    create_annotated_folder_yolo("runs/testfall_3_augmentations/datasets/mixup_var1")
-    create_annotated_folder_yolo("runs/testfall_3_augmentations/datasets/mixup_var2")
-    create_annotated_folder_yolo("runs/testfall_3_augmentations/datasets/mixup_var3")
+    create_annotated_folder_yolo("datasets\Erdbeeren100pC_640px")
+

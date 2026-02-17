@@ -2,6 +2,7 @@ from pathlib import Path
 from ultralytics import YOLO
 import pandas as pd
 import torch.nn as nn
+import time
 from src.custom_yolo import make_trainer
 
 def calc_f1_score(precision:float, recall:float):
@@ -21,15 +22,15 @@ def train_run(
     loss_func: str|None = None,
     dropout_rate: float|None = None
 ):
-
+    
     model = YOLO("YOLOv12n.pt")
     trainer = make_trainer(loss_func, dropout_rate)
 
     args = dict(
         data=data_yaml,
-        epochs=1,
+        epochs=300,
         imgsz=640,
-        batch=16,
+        batch=32,
         optimizer="SGD",
         lr0=0.01,
         weight_decay=0.0005,
@@ -43,13 +44,18 @@ def train_run(
         save_dir=(Path(project)/run_name).resolve(),
         trainer=trainer,
         exist_ok=False,
-        verbose=True
+        verbose=True,
+        patience=50
     )
 
     if extra_args:
         args.update(extra_args)
-
+    start_time = time.perf_counter()
     yolo_results = model.train(**args)
+    end_time = time.perf_counter()
+    training_time_sec = end_time - start_time
+    training_time_min = training_time_sec / 60
+
     class_results = yolo_results.to_df().rows(named=True)
     aggregate = {
         "Class": "Gesamt",
@@ -65,6 +71,8 @@ def train_run(
         ),
         "mAP50": round(yolo_results.results_dict["metrics/mAP50(B)"], 5),
         "mAP50-95": round(yolo_results.results_dict["metrics/mAP50-95(B)"], 5),
+        "Train-Time-Seconds": round(training_time_sec, 2),
+        "Train-Time-Minutes": round(training_time_min, 2)
     }
     full_results = [aggregate] + class_results
     df = pd.DataFrame(full_results)

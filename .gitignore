@@ -1,5 +1,5 @@
 # Daten
-datasets/
+test_datasets/
 
 # Trainings-Logs / Ergebnisse
 runs/
