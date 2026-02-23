@@ -13,68 +13,72 @@ def get_device():
 
 # DEVICE = get_device()
 DEVICE = None
+TRAIN_RUNS = 2
 
 random.seed(SEED)
 torch.manual_seed(SEED)
 
 
+
 def testfall_1_baseline(data, project):
-    train_run(
-        run_name=f"baseline_run_1",
-        data_yaml=data,
-        project=project,
-        device=DEVICE,
-        seed=SEED
-    )
+    for run_nr in range(TRAIN_RUNS):
+        train_run(
+            run_name=f"baseline_run_{run_nr}",
+            data_yaml=data,
+            project=project,
+            device=DEVICE,
+            seed=SEED
+        )
 
 
 def testfall_2_hyperparameter(data, project):
     # Box Loss Weight
-    loss_funcs = ['ciou', 'siou', 'eiou']
-    for loss_func in loss_funcs:
-        if loss_func != 'ciou':
-            train_run(
-                run_name=f"{loss_func}",
-                data_yaml=data,
-                project=project,
-                device=DEVICE,
-                seed=SEED,
-                loss_func=loss_func   
-            )
-        for val in [10, 12, 15]:
-            train_run(
-                run_name=f"{loss_func}_box_loss_{val}",
-                data_yaml=data,
-                project=project,
-                extra_args={"box": val},
-                device=DEVICE,
-                seed=SEED,
-                loss_func=loss_func   
-            )
+    for run_nr in range(TRAIN_RUNS):
+        loss_funcs = ['ciou', 'siou', 'eiou']
+        for loss_func in loss_funcs:
+            if loss_func != 'ciou':
+                train_run(
+                    run_name=f"{loss_func}_{run_nr}",
+                    data_yaml=data,
+                    project=project,
+                    device=DEVICE,
+                    seed=SEED,
+                    loss_func=loss_func   
+                )
+            for val in [10, 12, 15]:
+                train_run(
+                    run_name=f"{loss_func}_box_loss_{val}_{run_nr}",
+                    data_yaml=data,
+                    project=project,
+                    extra_args={"box": val},
+                    device=DEVICE,
+                    seed=SEED,
+                    loss_func=loss_func   
+                )
 
-        # Distribution Focal Loss
-        for val in [2, 3, 4]:
-            train_run(
-                run_name=f"{loss_func}_dfl_{val}",
-                data_yaml=data,
-                project=project,
-                extra_args={"dfl": val},
-                device=DEVICE,
-                seed=SEED,
-                loss_func=loss_func  
-            )
+            # Distribution Focal Loss
+            for val in [2, 3, 4]:
+                train_run(
+                    run_name=f"{loss_func}_dfl_{val}_{run_nr}",
+                    data_yaml=data,
+                    project=project,
+                    extra_args={"dfl": val},
+                    device=DEVICE,
+                    seed=SEED,
+                    loss_func=loss_func  
+                )
 
-        # class weight loss
-        for val in [1, 2, 3]:
-            train_run(
-                run_name=f"{loss_func}_cls_{val}",
-                data_yaml=data,
-                project=project,
-                extra_args={"cls": val},
-                device=DEVICE,
-                seed=SEED,
-                loss_func=loss_func  
-            )
+            # class weight loss
+            for val in [1, 2, 3]:
+                train_run(
+                    run_name=f"{loss_func}_cls_{val}_{run_nr}",
+                    data_yaml=data,
+                    project=project,
+                    extra_args={"cls": val},
+                    device=DEVICE,
+                    seed=SEED,
+                    loss_func=loss_func  
+                )
 
 AUGMENTATIONS = {
     # --- CopyPaste  ---
@@ -230,57 +234,59 @@ def testfall_3_augment_training(original_dataset_dir: str, project_dir: str):
     erzeugt jeweils einen augmentierten Datensatz und trainiert YOLOv12n darauf.
     """
 
-    original_dataset_dir = Path(original_dataset_dir)
-    project_dir = Path(project_dir)
+    for run_nr in range(TRAIN_RUNS):
 
-    for aug_name, transforms in AUGMENTATIONS.items():
-        for idx, transform in enumerate(transforms, start=1):
+        original_dataset_dir = Path(original_dataset_dir)
+        project_dir = Path(project_dir)
 
-            # -------------------------------
-            # 1. Neuen Datensatz erstellen
-            # -------------------------------
-            dataset_name = f"{aug_name}_var{idx}"
-            dataset_dir = project_dir / "datasets" / dataset_name
-            dataset_dir.mkdir(parents=True, exist_ok=True)
+        for aug_name, transforms in AUGMENTATIONS.items():
+            for idx, transform in enumerate(transforms, start=1):
 
-            print(f"[INFO] Erstelle Datensatz: {dataset_name}")
-            # TODO: create_augmented_dataset muss implementiert sein
-            create_augmented_dataset(
-                original_dataset_dir=original_dataset_dir,
-                output_dir=dataset_dir,
-                transform=transform,
-                aug_name=aug_name
-            )
+                # -------------------------------
+                # 1. Neuen Datensatz erstellen
+                # -------------------------------
+                dataset_name = f"{aug_name}_var{idx}"
+                dataset_dir = project_dir / "datasets" / dataset_name
+                dataset_dir.mkdir(parents=True, exist_ok=True)
 
-            # -------------------------------
-            # 2. Trainieren
-            # -------------------------------
-            run_name = f"{dataset_name}_run"
-            data_yaml = dataset_dir / "data.yaml"  # jedes Dataset sollte eigene YAML haben
+                print(f"[INFO] Erstelle Datensatz: {dataset_name}")
+                # TODO: create_augmented_dataset muss implementiert sein
+                create_augmented_dataset(
+                    original_dataset_dir=original_dataset_dir,
+                    output_dir=dataset_dir,
+                    transform=transform,
+                    aug_name=aug_name
+                )
 
-            print(f"[INFO] Starte Training: {run_name}")
-            train_run(
-                run_name=run_name,
-                data_yaml=str(data_yaml),
-                project=str(project_dir),
-                device=DEVICE,
-                seed=SEED
-            )
+                # -------------------------------
+                # 2. Trainieren
+                # -------------------------------
+                run_name = f"{dataset_name}_run_{run_nr}"
+                data_yaml = dataset_dir / "data.yaml"  # jedes Dataset sollte eigene YAML haben
+
+                print(f"[INFO] Starte Training: {run_name}")
+                train_run(
+                    run_name=run_name,
+                    data_yaml=str(data_yaml),
+                    project=str(project_dir),
+                    device=DEVICE,
+                    seed=SEED
+                )
 
 
 if __name__ == "__main__":
     project1 = "runs/testfall_1_baseline"
-    # data1 = "datasets/Erdbeeren100pC_640px/data.yaml"
-    data1 = r"test_datasets\strawberry_test\data.yaml"
-    testfall_1_baseline( data1, project1)
+    data1 = "datasets/Erdbeeren100pC_640px/data.yaml"
+    # data1 = r"test_datasets\strawberry_test\data.yaml"
+    testfall_1_baseline(data1, project1)
 
-    # project2 = "runs/testfall_2_hyperparameter"
-    # testfall_2_hyperparameter(data1, project2)
+    project2 = "runs/testfall_2_hyperparameter"
+    testfall_2_hyperparameter(data1, project2)
 
-    # project3 = "runs/testfall_3_augmentations" 
-    # data3 = "datasets/Erdbeeren100pC_640px_Aug_2/data.yaml"
-    # testfall_3_augment_training(data3, project3)
+    project3 = "runs/testfall_3_augmentations" 
+    data3 = "datasets/Erdbeeren100pC_640px_Aug_2/data.yaml"
+    testfall_3_augment_training(data3, project3)
 
-    # project3 = "runs/testfall_3_augmentations2" 
-    # data3 = "datasets/Erdbeeren100pC_640px_Aug_3/data.yaml"
-    # testfall_3_augment_training(data3, project3)
+    project3 = "runs/testfall_3_augmentations2" 
+    data3 = "datasets/Erdbeeren100pC_640px_Aug_3/data.yaml"
+    testfall_3_augment_training(data3, project3)
