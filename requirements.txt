@@ -2,7 +2,7 @@ albucore==0.0.23
 albumentations==1.4.24
 annotated-types==0.7.0
 asttokens==3.0.1
-certifi==2026.1.4
+certifi==2026.10.18
 charset-normalizer==3.4.4
 colorama==0.4.6
 comm==0.2.3
